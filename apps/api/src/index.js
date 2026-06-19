@@ -20,6 +20,10 @@ function signToken(user) {
   return jwt.sign({ sub: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 }
 
+function signWidgetToken(widgetId) {
+  return jwt.sign({ widgetId }, JWT_SECRET, { expiresIn: '1h' });
+}
+
 function authMiddleware(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth) return res.status(401).json({ error: 'no_token' });
@@ -83,7 +87,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Widgets
+// Public widget settings
 app.get('/api/widgets/:id', async (req, res) => {
   const { id } = req.params;
   try {
@@ -92,6 +96,92 @@ app.get('/api/widgets/:id', async (req, res) => {
     return res.json({ id: widget.id, settings: widget.settings });
   } catch (err) {
     console.error(err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+// Widget CRUD - protected
+app.post('/api/widgets', authMiddleware, async (req, res) => {
+  const { name, settings } = req.body;
+  try {
+    const widget = await prisma.widget.create({ data: { name, settings: settings || {}, ownerId: req.user.sub } });
+    return res.json(widget);
+  } catch (err) {
+    console.error('create widget error', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+app.get('/api/widgets', authMiddleware, async (req, res) => {
+  try {
+    const widgets = await prisma.widget.findMany({ where: { ownerId: req.user.sub } });
+    return res.json(widgets);
+  } catch (err) {
+    console.error('list widgets error', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+app.put('/api/widgets/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { name, settings } = req.body;
+  try {
+    const widget = await prisma.widget.update({ where: { id }, data: { name, settings } });
+    return res.json(widget);
+  } catch (err) {
+    console.error('update widget error', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+app.delete('/api/widgets/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await prisma.widget.delete({ where: { id } });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('delete widget error', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+// Generate short-lived token for widget (protected)
+app.post('/api/widgets/:id/generate-token', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const widget = await prisma.widget.findUnique({ where: { id } });
+    if (!widget) return res.status(404).json({ error: 'Widget not found' });
+    // ensure owner
+    if (widget.ownerId !== req.user.sub) return res.status(403).json({ error: 'forbidden' });
+    const token = signWidgetToken(id);
+    return res.json({ token });
+  } catch (err) {
+    console.error('generate token error', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+// Conversations - protected
+app.get('/api/conversations', authMiddleware, async (req, res) => {
+  const { widgetId, take = 50, skip = 0 } = req.query;
+  try {
+    const where = widgetId ? { widgetId } : {};
+    const conversations = await prisma.conversation.findMany({ where, take: Number(take), skip: Number(skip), orderBy: { updatedAt: 'desc' } });
+    return res.json(conversations);
+  } catch (err) {
+    console.error('list conversations error', err);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+app.get('/api/conversations/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const conversation = await prisma.conversation.findUnique({ where: { id }, include: { messages: { orderBy: { createdAt: 'asc' } } } });
+    if (!conversation) return res.status(404).json({ error: 'not_found' });
+    return res.json(conversation);
+  } catch (err) {
+    console.error('get conversation error', err);
     return res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -145,15 +235,16 @@ const io = new Server(server, {
 
 // Redis adapter optional
 if (process.env.REDIS_URL) {
-  try {
-    // lazy import
-    const { createAdapter } = await import('socket.io-redis');
-    const adapter = createAdapter({ url: process.env.REDIS_URL });
-    io.adapter(adapter);
-    console.log('Redis adapter enabled for Socket.io');
-  } catch (e) {
-    console.warn('Failed to enable Redis adapter, continuing without it', e);
-  }
+  (async () => {
+    try {
+      const { createAdapter } = await import('socket.io-redis');
+      const adapter = createAdapter({ url: process.env.REDIS_URL });
+      io.adapter(adapter);
+      console.log('Redis adapter enabled for Socket.io');
+    } catch (e) {
+      console.warn('Failed to enable Redis adapter, continuing without it', e);
+    }
+  })();
 }
 
 const lycan = io.of('/lycan');
