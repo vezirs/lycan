@@ -1,0 +1,16 @@
+{
+  "name": "lycan",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "bootstrap": "pnpm install",
+    "dev": "echo \"Run individual apps with pnpm --filter <workspace> dev\"",
+    "build": "pnpm -w -r build",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx"
+  }
+}

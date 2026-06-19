@@ -1,0 +1,10 @@
+{
+  "name": "widget",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "echo \"build step for widget (to be implemented)\""
+  }
+}
