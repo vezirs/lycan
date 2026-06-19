@@ -4,19 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch ./src/index.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node ./dist/index.js"
+    "dev": "node --watch ./src/index.js",
+    "build": "echo \"no build step\"",
+    "start": "node ./src/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "node ./prisma/seed.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2",
-    "prisma": "^5.9.0",
     "@prisma/client": "^5.9.0",
-    "dotenv": "^16.1.4"
+    "dotenv": "^16.1.4",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.3.0",
-    "ts-node": "^10.9.1"
+    "prisma": "^5.9.0"
   }
 }
